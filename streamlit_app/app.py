@@ -95,10 +95,14 @@ def rodar_agente_tecnico(tickers):
 
 import requests
 from bs4 import BeautifulSoup
-from transformers import pipeline
 
-# Carrega modelo de sentimento
-sentimento_model = pipeline("sentiment-analysis")
+def analisar_sentimento_simples(texto):
+    if any(p in texto.lower() for p in ["alta", "lucro", "crescimento", "positivo", "recorde"]):
+        return "POSITIVO"
+    elif any(p in texto.lower() for p in ["queda", "prejuízo", "problema", "crise", "negativo"]):
+        return "NEGATIVO"
+    else:
+        return "NEUTRO"
 
 def buscar_noticias(ticker):
     # Exemplo com InfoMoney e consulta simples
