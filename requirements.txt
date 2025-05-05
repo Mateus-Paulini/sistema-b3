@@ -1,0 +1,8 @@
+streamlit
+yfinance
+pandas
+numpy
+fpdf
+requests
+beautifulsoup4
+transformers
