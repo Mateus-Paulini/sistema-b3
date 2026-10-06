@@ -2,19 +2,58 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <title>Conquista Estelar</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=Exo+2:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
-<body>
-<div id="wrap">
-  <canvas id="game" width="480" height="270"></canvas>
-  <div id="bar"></div>
-  <div id="panel"></div>
+<body class="at-title">
+<!--BODY-->
+<canvas id="view"></canvas>
+
+<div id="hud">
+  <div class="hud-tl">
+    <div class="cr"><span class="lbl">Créditos</span><b id="h-cr">0</b><span class="unit">CR</span></div>
+    <div class="bar" id="h-hull"><label>Casco</label><div class="track"><i></i></div><span></span></div>
+    <div class="bar en" id="h-en"><label>Energia</label><div class="track"><i></i></div><span></span></div>
+    <div class="bar cargo" id="h-cargo"><label>Carga</label><div class="track"><i></i></div><span></span></div>
+    <div class="spd"><span class="lbl">Velocidade</span> <b id="h-spd">0</b> <span class="unit">u/s</span></div>
+  </div>
+  <div class="hud-tr">
+    <canvas id="radar" width="170" height="170"></canvas>
+    <div class="loc"><span class="lbl">Setor</span> <b id="h-sec">0, 0</b></div>
+    <div class="loc ring" id="h-ring"></div>
+    <div class="hud-btns"><button class="btn ghost sm" id="h-help">Manual <kbd>H</kbd></button><button class="btn ghost sm" id="h-menu">Menu</button></div>
+  </div>
+  <div id="prompt"></div>
+  <div id="toasts"></div>
+  <div id="touch">
+    <button id="t-boost" class="tbtn">Turbo</button>
+    <button id="t-fire" class="tbtn fire">Laser</button>
+    <div class="tz"><button id="t-zin" class="tbtn sm">+</button><button id="t-zout" class="tbtn sm">−</button></div>
+  </div>
 </div>
-<script src="game.js"></script>
+
+<div id="title">
+  <div class="t-inner">
+    <div class="eyebrow">Um universo sem fim</div>
+    <h1>Conquista<br>Estelar</h1>
+    <p class="tag">Explore setores infinitos, minere asteroides, negocie com mundos de governos diferentes e avance rumo ao abismo.</p>
+    <div class="t-btns">
+      <button class="btn primary lg" id="btn-new">Nova campanha</button>
+      <button class="btn lg" id="btn-continue" hidden>Continuar</button>
+      <button class="btn ghost lg" id="btn-help">Controles</button>
+    </div>
+  </div>
+</div>
+
+<div id="panel"></div>
+<!--/BODY-->
+<script src="js/core.js"></script>
+<script src="js/universe.js"></script>
+<script src="js/gfx.js"></script>
+<script src="js/main.js"></script>
 </body>
 </html>

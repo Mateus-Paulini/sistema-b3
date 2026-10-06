@@ -1,52 +1,61 @@
 # Conquista Estelar
 
-Um RPG 2D retrô de conquista galáctica: conquiste planetas, aprimore minas e defesas,
-melhore sua nave e proteja seus mundos do **Império Nyx**. Tudo em pixel art,
-renderizado em baixa resolução (480×270) com efeitos sonoros 8-bit gerados na hora.
+Jogo 2D de exploração espacial em visão de cima, com universo infinito gerado
+proceduralmente. Baseado no roteiro de design "Jogo 2D de Espaço": progressão
+infinita de naves, planetas procedurais infinitos, governos e política.
 
-Feito com HTML5 Canvas + JavaScript puro. Não precisa de build nem de dependências.
+HTML5 Canvas + JavaScript puro, sem build nem dependências.
 
-## Como jogar
-
-Abra `index.html` no navegador. Ou sirva a pasta localmente:
+## Como rodar
 
 ```bash
 cd jogo-conquista-estelar
 python -m http.server 8000
-# acesse http://localhost:8000
+# abra http://localhost:8000
 ```
 
-O progresso é salvo automaticamente no `localStorage` do navegador.
+Abrir o `index.html` direto no navegador também funciona. O progresso é salvo
+no `localStorage`.
 
-### Controles
+## Controles
 
-| Ação | Teclado | Mouse / Toque |
+| Ação | Teclado / mouse | Toque |
 | --- | --- | --- |
-| Mover nave | WASD / Setas | segurar e arrastar |
-| Atirar | Espaço / J | segurar (atira junto) |
-| Bomba de pulso | B / K | botão **Bomba** |
-| Pausar / recuar | Esc / P | botão **Pausa** |
-| Hangar (no mapa) | H | botão **Hangar** |
-| Som liga/desliga | M | botão **Som** |
+| Propulsão | W A S D / setas | joystick (metade esquerda da tela) |
+| Mirar | mouse | direção do joystick |
+| Laser de mineração | clique / Espaço | botão **Laser** |
+| Pós-combustão | Shift | botão **Turbo** |
+| Entrar/sair de órbita | E | toque no aviso |
+| Zoom | roda do mouse / + − | botões + − |
+| Manual | H | botão **Manual** |
 
-## Mecânicas
+## Roteiro de desenvolvimento
 
-- **Mapa galáctico**: 14 planetas gerados proceduralmente e ligados por rotas.
-  Você só pode invadir planetas vizinhos aos seus (anel amarelo).
-- **Conquista**: combate de nave em estilo shoot 'em up, dividido em ondas
-  (drones, caças, tanques). A capital Nyx é guardada por uma nau-capitânia (chefe).
-- **Planetas**: cada planeta seu gera créditos por segundo.
-  - *Mina*: aumenta a renda.
-  - *Defesa*: adiciona torretas que lutam ao seu lado e aumenta a chance de
-    resistir a invasões sem a sua ajuda.
-- **Proteção**: o Império ataca periodicamente os seus planetas de fronteira.
-  Você pode **defender pessoalmente** (as torretas do planeta ajudam) ou
-  **confiar nas defesas** (resultado por chance). Ele também se expande sobre planetas piratas.
-- **Hangar (RPG)**:
-  - 7 aprimoramentos: Blindagem, Escudo, Laser, Cadência, Motor, Canhões e Ímã.
-  - 3 naves: Falcão (equilibrada), Vespa (veloz) e Titã (pesada, +1 canhão).
-  - Reparos e bombas de pulso.
-- **Piloto**: ganha XP abatendo inimigos e conquistando planetas. Cada nível
-  dá mais dano e mais casco.
-- **Vitória**: tome todos os planetas do Império Nyx.
-  **Derrota**: perca todos os seus planetas.
+- [x] **Estágio 1: exploração infinita**
+  - Setores de 9.000 unidades gerados por semente + coordenada (sempre iguais
+    ao revisitar), carregados sob demanda.
+  - Sistemas estelares de 7 classes (anã vermelha a gigante azul), buracos
+    negros com disco de acreção e gravidade, cinturões e aglomerados de asteroides.
+  - Planetas de 8 tipos (rochoso, desértico, oceânico, terrestre, vulcânico,
+    gelado, gigante gasoso, exótico) e variantes. Texturas esféricas procedurais
+    com rotação, iluminação pela estrela, nuvens, oceanos com reflexo, luzes de
+    cidades e lava no lado noturno, atmosfera e anéis.
+  - Atributos por planeta: diâmetro, gravidade, temperatura, atmosfera,
+    recursos, população, governo, perigos e mercado próprio.
+  - Mineração (asteroides se partem e soltam minério), porão de carga, venda
+    nos planetas, reparo, créditos de cartografia por descobertas.
+  - A dificuldade e a riqueza crescem com a distância da origem (anéis).
+- [ ] **Estágio 2: nave infinita**: atributos com níveis sem teto
+  (custo = base × 1,15^nível), classes Mk que mudam o visual, módulos com
+  raridade, piratas e combate.
+- [ ] **Estágio 3: planetas**: colonização e árvores de melhoria infinitas
+  (minas, fazendas, estaleiros, universidades, defesas orbitais), renda passiva.
+- [ ] **Estágio 4: política**: escolha e troca de governo, diplomacia entre
+  vizinhos, eleições, golpes e rebeliões, prestígio/ascensão.
+
+## Estrutura
+
+- `js/core.js`: RNG determinístico, ruído simplex 3D, FBM, fila de geração em segundo plano.
+- `js/universe.js`: tabelas (tipos de planeta, recursos, governos, estrelas) e geração por setor.
+- `js/gfx.js`: renderização de planetas, estrelas, buracos negros, asteroides, naves e nebulosas.
+- `js/main.js`: loop do jogo, física de voo, HUD, radar, painéis e save.
