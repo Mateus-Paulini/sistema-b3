@@ -150,7 +150,7 @@ function makePlanet(sec, rng, i, type, r, orbit, isHome) {
     spin: rng.range(0.006, 0.02) * (rng.chance(0.15) ? -1 : 1),
     tilt: rng.range(-0.45, 0.45),
     ring: rng.chance(pt.ring) && !isHome, ringTilt: rng.range(-0.5, 0.5),
-    home: isHome, cx: star.x, cy: star.y,
+    home: isHome, cx: star.x, cy: star.y, dist: sec.d,
   };
   const temp = Math.round(-180 + 460 * sc.temp / Math.sqrt(orbit / 1000) * 0.55 + (type === 'vulcanico' ? 300 : 0) + (type === 'gelado' ? -60 : 0));
   p.tempC = temp;
@@ -193,7 +193,7 @@ function addAsteroid(sec, rng, x, y) {
   sec.asteroids.push({
     id: sec.key + ':a' + sec.asteroids.length, x, y, r, ore,
     spin: rng.range(-0.6, 0.6), a0: rng.range(0, TAU), seed: rng.int(1, 1e9),
-    hp: r * 2.2, maxHp: r * 2.2,
+    hp: r * 2.2 * (1 + d * 0.12), maxHp: r * 2.2 * (1 + d * 0.12), dist: d,
   });
 }
 

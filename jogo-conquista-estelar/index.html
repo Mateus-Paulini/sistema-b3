@@ -15,8 +15,10 @@
 
 <div id="hud">
   <div class="hud-tl">
-    <div class="cr"><span class="lbl">Créditos</span><b id="h-cr">0</b><span class="unit">CR</span></div>
+    <div class="cr"><span class="lbl">Créditos</span><b id="h-cr">0</b><span class="unit">CR</span><span class="mk" id="h-mk">Mk I</span></div>
+    <div class="rpl"><span class="lbl">Pesquisa</span> <b id="h-rp">0</b> <span class="unit">PP</span></div>
     <div class="bar" id="h-hull"><label>Casco</label><div class="track"><i></i></div><span></span></div>
+    <div class="bar sh" id="h-sh"><label>Escudo</label><div class="track"><i></i></div><span></span></div>
     <div class="bar en" id="h-en"><label>Energia</label><div class="track"><i></i></div><span></span></div>
     <div class="bar cargo" id="h-cargo"><label>Carga</label><div class="track"><i></i></div><span></span></div>
     <div class="spd"><span class="lbl">Velocidade</span> <b id="h-spd">0</b> <span class="unit">u/s</span></div>
@@ -25,8 +27,16 @@
     <canvas id="radar" width="170" height="170"></canvas>
     <div class="loc"><span class="lbl">Setor</span> <b id="h-sec">0, 0</b></div>
     <div class="loc ring" id="h-ring"></div>
-    <div class="hud-btns"><button class="btn ghost sm" id="h-help">Manual <kbd>H</kbd></button><button class="btn ghost sm" id="h-menu">Menu</button></div>
+    <div class="hud-btns"><button class="btn ghost sm" data-open="KeyH">Manual <kbd>H</kbd></button><button class="btn ghost sm" id="h-menu">Menu</button></div>
   </div>
+  <nav class="menubar" aria-label="Painéis">
+    <button class="mb" data-open="KeyN"><b>Nave</b><kbd>N</kbd></button>
+    <button class="mb" data-open="KeyI"><b>Império</b><kbd>I</kbd></button>
+    <button class="mb" data-open="KeyR"><b>Pesquisa</b><kbd>R</kbd></button>
+    <button class="mb" data-open="KeyP"><b>Política</b><kbd>P</kbd><span class="badge" id="b-pol" hidden></span></button>
+    <button class="mb" data-open="KeyC"><b>Contratos</b><kbd>C</kbd></button>
+    <button class="mb" data-open="KeyM"><b>Mapa</b><kbd>M</kbd></button>
+  </nav>
   <div id="prompt"></div>
   <div id="toasts"></div>
   <div id="touch">
@@ -40,7 +50,7 @@
   <div class="t-inner">
     <div class="eyebrow">Um universo sem fim</div>
     <h1>Conquista<br>Estelar</h1>
-    <p class="tag">Explore setores infinitos, minere asteroides, negocie com mundos de governos diferentes e avance rumo ao abismo.</p>
+    <p class="tag">Explore setores infinitos, evolua sua nave sem limite, colonize mundos, escolha seus governos e avance rumo ao abismo.</p>
     <div class="t-btns">
       <button class="btn primary lg" id="btn-new">Nova campanha</button>
       <button class="btn lg" id="btn-continue" hidden>Continuar</button>
@@ -53,7 +63,11 @@
 <!--/BODY-->
 <script src="js/core.js"></script>
 <script src="js/universe.js"></script>
+<script src="js/data.js"></script>
 <script src="js/gfx.js"></script>
+<script src="js/ship.js"></script>
+<script src="js/empire.js"></script>
+<script src="js/ui.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>
