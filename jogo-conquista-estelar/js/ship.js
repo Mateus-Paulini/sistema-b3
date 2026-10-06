@@ -156,9 +156,9 @@ const stripTags = s => s.replace(/<[^>]+>/g, '');
 
 /* ---------- piratas ---------- */
 let pirateT = 35;
-function spawnFleet(d, nearX, nearY) {
+function spawnFleet(d, nearX, nearY, raid) {
   const S = G.ship;
-  const n = Math.min(6, 1 + Math.floor(Math.random() * (1 + d / 5)));
+  const n = Math.min(raid ? 9 : 7, 1 + Math.floor(Math.random() * (1 + d / 5)) + Math.floor(escorts().length / 2) + (raid ? 2 : 0));
   const a0 = rnd(TAU);
   const cx = nearX ?? S.x + Math.cos(a0) * rnd(1900, 2500), cy = nearY ?? S.y + Math.sin(a0) * rnd(1900, 2500);
   const types = Object.keys(ENEMY_TYPES).filter(k => ENEMY_TYPES[k].minD <= d);
@@ -170,7 +170,7 @@ function spawnFleet(d, nearX, nearY) {
       type: tp, x: cx + rnd(-200, 200), y: cy + rnd(-200, 200), vx: 0, vy: 0, a: a0 + Math.PI,
       hp: T.hp * s, maxHp: T.hp * s, dmg: T.dmg * s, spd: T.spd, cd: rnd(1, 2), r: T.r, s, d, t: rnd(10), hit: 0,
       orbit: Math.random() < 0.5 ? 1 : -1, range: rnd(380, 620),
-      design: makeShipDesign(T.tier, '#4a4048', '#ff3b3b', 99 + T.tier),
+      design: makeShipDesign(T.tier, '#4a4048', '#ff3b3b', 99 + T.tier), raid: !!raid,
     });
   }
   toast(n > 1 ? `Frota pirata detectada: ${n} naves!` : 'Nave pirata detectada!', 'bad');
@@ -184,7 +184,7 @@ function pirateRisk() {
     if (dist(S.x, S.y, p._x, p._y) > 5000) continue;
     if (p.hazards.includes('Piratas em órbita')) r += 0.25;
     if (planetGov(p) === 'anarquia') r += 0.12;
-    if (isColony(p)) r -= 0.1 * Math.min(5, G.col[p.id].b.defesa);
+    if (isColony(p)) r -= 0.03 * Math.min(20, defensePower(p, G.col[p.id]));
   }
   return clamp(r, 0, 0.95);
 }
@@ -200,10 +200,16 @@ function updateEnemies(dt) {
   for (let i = ENEMIES.length - 1; i >= 0; i--) {
     const e = ENEMIES[i];
     e.t += dt; e.hit -= dt; e.cd -= dt;
-    const dx = S.x - e.x, dy = S.y - e.y, dd = Math.hypot(dx, dy) || 1;
-    if (dd > 8000) { ENEMIES.splice(i, 1); continue; }
+    const dS = dist(S.x, S.y, e.x, e.y);
+    if (dS > 9000) { ENEMIES.splice(i, 1); continue; }
+    // alvo: o mais próximo entre a nau capitânia e as naves da frota
+    let T = (!dead && !dock) ? { x: S.x, y: S.y, vx: S.vx, vy: S.vy, player: true } : null, td = T ? dS : 1e9;
+    for (const ft of fleetTargets()) { const d2 = dist(e.x, e.y, ft.x, ft.y); if (d2 < td && d2 < 2600) { td = d2; T = ft; } }
+    if (!T && e.raid) for (const p of snap.planets) if (isColony(p)) { const d2 = dist(e.x, e.y, p._x, p._y); if (d2 < td) { td = d2; T = { x: p._x, y: p._y, vx: 0, vy: 0, planet: p }; } }
+    const tx = T ? T.x : S.x, ty = T ? T.y : S.y, tgvx = T ? T.vx : 0, tgvy = T ? T.vy : 0;
+    const dx = tx - e.x, dy = ty - e.y, dd = Math.hypot(dx, dy) || 1;
     let tvx, tvy;
-    const hunting = !dead && !dock;
+    const hunting = !!T;
     if (!hunting) { tvx = Math.cos(e.t * 0.3) * e.spd * 0.4; tvy = Math.sin(e.t * 0.3) * e.spd * 0.4; }
     else if (dd > e.range + 160) { tvx = dx / dd * e.spd; tvy = dy / dd * e.spd; }
     else {
@@ -214,7 +220,7 @@ function updateEnemies(dt) {
     // separação entre naves inimigas
     for (const o of ENEMIES) if (o !== e) { const ox = e.x - o.x, oy = e.y - o.y, od = Math.hypot(ox, oy); if (od < 90 && od > 0) { e.vx += ox / od * 240 * dt; e.vy += oy / od * 240 * dt; } }
     e.x += e.vx * dt; e.y += e.vy * dt;
-    const aimA = Math.atan2(dy + S.vy * dd / 900, dx + S.vx * dd / 900);
+    const aimA = Math.atan2(dy + tgvy * dd / 900, dx + tgvx * dd / 900);
     const faceA = hunting && dd < 1300 ? aimA : Math.atan2(e.vy, e.vx);
     e.a += clamp(angDiff(e.a, faceA), -4 * dt, 4 * dt);
     if (hunting && dd < 1150 && e.cd <= 0 && Math.abs(angDiff(e.a, aimA)) < 0.3) {
@@ -227,7 +233,7 @@ function updateEnemies(dt) {
       }
       if (Sfx.rate('es', 120)) Sfx.tone(520, 0.08, 'square', 0.015, -260);
     }
-    if (hunting && dd < e.r + 18) { damage(e.dmg * 1.5); e.vx = -e.vx; e.vy = -e.vy; }
+    if (T && T.player && dd < e.r + 18) { damage(e.dmg * 1.5); e.vx = -e.vx; e.vy = -e.vy; }
   }
 }
 
@@ -240,7 +246,8 @@ function updateProjectiles(dt) {
     b.life -= dt;
     if (b.kind === 'missile') {
       let tgt = null, bd = 1800;
-      for (const e of ENEMIES) { const d = dist(b.x, b.y, e.x, e.y); if (d < bd) { bd = d; tgt = e; } }
+      if (b.tgt && (ENEMIES.includes(b.tgt) || (b.tgt.hp > 0 && !ENEMIES.length))) tgt = b.tgt;
+      else for (const e of ENEMIES) { const d = dist(b.x, b.y, e.x, e.y); if (d < bd) { bd = d; tgt = e; } }
       if (!tgt && auto && auto.kind === 'mine' && auto.target) tgt = auto.target;
       const sp = Math.hypot(b.vx, b.vy);
       let want = Math.atan2(b.vy, b.vx);
@@ -255,7 +262,8 @@ function updateProjectiles(dt) {
     for (let s = 0; s < steps && !hit; s++) {
       b.x += b.vx * dt / steps; b.y += b.vy * dt / steps;
       if (b.own === 'e') {
-        if (!dead && !dock && dist(b.x, b.y, S.x, S.y) < 20) { damage(b.dmg); burst(b.x, b.y, 6, [255, 90, 70], 150, 0.35, 2); hit = true; }
+        if (!dead && !dock && dist(b.x, b.y, S.x, S.y) < 20) { damage(b.dmg); burst(b.x, b.y, 6, [255, 90, 70], 150, 0.35, 2); hit = true; continue; }
+        for (const ft of fleetTargets()) if (dist(b.x, b.y, ft.x, ft.y) < ft.r) { damageFleetShip(ft.s, b.dmg); burst(b.x, b.y, 6, [255, 90, 70], 150, 0.35, 2); hit = true; break; }
         continue;
       }
       const rad = b.r || 0;
@@ -268,7 +276,7 @@ function updateProjectiles(dt) {
         if (dist(b.x, b.y, a.x, a.y) < a.r * 0.85 + rad) { hitAsteroid(a, b.dmg, b.x, b.y); hit = true; break; }
       }
     }
-    if (hit && (b.kind === 'plasma' || b.kind === 'missile')) { burst(b.x, b.y, 22, [255, 150, 255], 220, 0.6, 3); Sfx.boom(false); }
+    if (hit && (b.kind === 'plasma' || b.kind === 'missile' || b.kind === 'rail')) { burst(b.x, b.y, 22, [255, 150, 255], 220, 0.6, 3); Sfx.boom(false); }
     if (hit || b.life <= 0) PROJ.splice(i, 1);
   }
 }

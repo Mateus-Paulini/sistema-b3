@@ -227,3 +227,17 @@ body.at-title #title { display: flex; }
 .cr b { font-size: 1.35rem; }
 .bar { grid-template-columns: 58px 1fr 84px; }
 .tabs { flex-wrap: wrap; overflow: visible; }
+/* painel lateral não bloqueia cliques no espaço (permite traçar rota estando em órbita) */
+#panel.side { pointer-events: none; background: none; }
+#panel.side .sheet { pointer-events: auto; }
+.orders { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.shipcard { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 12px; padding: 10px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.06); }
+.shipcard .mini { width: 72px; height: 72px; background: rgba(95, 225, 255, 0.04); border: 1px solid var(--line); }
+.sc-info { display: grid; gap: 6px; min-width: 0; }
+.sc-info .meter { height: 4px; }
+.wslots { display: flex; flex-wrap: wrap; gap: 8px; }
+.wsl { display: flex; align-items: center; gap: 6px; font-size: 0.78rem; color: var(--ink-dim); }
+.wsl select { font: inherit; font-size: 0.82rem; color: var(--ink); background: #0c1626; border: 1px solid var(--line); padding: 4px 6px; }
+.wsl select:disabled { opacity: 0.5; }
+.r-act.left { justify-content: flex-start; }
+.bigbar.warn i { background: linear-gradient(90deg, #b02a2a, var(--red)); }

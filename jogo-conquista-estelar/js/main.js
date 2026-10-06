@@ -26,7 +26,7 @@ function freshState(seed, meta) {
     col: {}, inf: {}, ngov: {}, events: [], news: [], contracts: [], doneContracts: {}, shopSold: {}, extract: {},
     discovered: {}, lastDock: null, mined: {}, rings: { 0: 1 }, maxDist: 0,
     stats: { dist: 0, mined: 0, found: 0, deaths: 0, earned: 0, kills: 0 },
-    meta: meta || { essence: 0, ascensions: 0 }, zoom: 0.55,
+    meta: meta || { essence: 0, ascensions: 0 }, zoom: 0.55, fleet: [], fleetOrder: 'escolta',
   };
 }
 function newGame(seed, meta) {
@@ -43,6 +43,7 @@ function newGame(seed, meta) {
   G.ship.equip.push(G.inv[0].id);
   cam.x = G.ship.x; cam.y = G.ship.y;
   ST = shipStats();
+  G.fleet.push(newFleetShip('caca'));
 }
 function migrate(d) {
   const f = freshState(d.seed, d.meta);
@@ -51,12 +52,20 @@ function migrate(d) {
   for (const k in f.ship.lv) if (d.ship.lv[k] === undefined) d.ship.lv[k] = 0;
   for (const k in f.tech) if (d.tech[k] === undefined) d.tech[k] = 0;
   for (const k in f.stats) if (d.stats[k] === undefined) d.stats[k] = 0;
+  for (const id in d.col) {
+    const c = d.col[id];
+    if (!c.def) c.def = Object.fromEntries(DEF_KEYS.map(k => [k, 0]));
+    for (const k of DEF_KEYS) if (c.def[k] === undefined) c.def[k] = 0;
+    if (c.b.defesa) { c.def.laser = Math.max(c.def.laser, c.b.defesa); }
+    delete c.b.defesa;
+  }
   return d;
 }
 function resetWorldCaches() {
   sectorCache.clear(); texCache.clear(); planetCanvases.clear(); nebCache.clear(); ringCache.clear(); starCache.clear(); diskCache.clear(); planetCache.clear();
   nebNoise = null; Jobs.q.length = 0;
   PROJ.length = PICKS.length = FRAGS.length = PARTS.length = ENEMIES.length = 0;
+  FLEET_RT.clear(); DRONES.clear(); designCacheF.clear();
   auto = null; dock = null; dead = 0; extracting = null;
 }
 function save() {
@@ -64,7 +73,7 @@ function save() {
   try {
     for (const k in G.mined) if (G.time - G.mined[k] > 700) delete G.mined[k];
     const cols = {};
-    for (const id in G.col) { const { _nb, _pt, ...rest } = G.col[id]; cols[id] = rest; }
+    for (const id in G.col) { const { _nb, _pt, _cd, ...rest } = G.col[id]; cols[id] = rest; }
     localStorage.setItem(SAVE_KEY, JSON.stringify({ ...G, col: cols }));
     return true;
   } catch (e) { return false; }
@@ -117,8 +126,8 @@ const mouse = { x: 0, y: 0, down: false, moved: 0 };
 let turnKeyT = 0, touchMode = false;
 const joy = { id: null, ox: 0, oy: 0, x: 0, y: 0, on: false, t0: 0 };
 const tbtn = { fire: false, boost: false };
-const PANEL_KEYS = { KeyN: () => openShipPanel(), KeyI: () => openEmpirePanel(), KeyR: () => openResearchPanel(), KeyP: () => openPoliticsPanel(), KeyC: () => openContractsPanel(), KeyM: () => openMapPanel(), KeyH: () => openHelp() };
-const PANEL_KEY_KIND = { KeyN: 'ship', KeyI: 'empire', KeyR: 'research', KeyP: 'politics', KeyC: 'contracts', KeyM: 'map', KeyH: 'help' };
+const PANEL_KEYS = { KeyF: () => openFleetPanel(), KeyN: () => openShipPanel(), KeyI: () => openEmpirePanel(), KeyR: () => openResearchPanel(), KeyP: () => openPoliticsPanel(), KeyC: () => openContractsPanel(), KeyM: () => openMapPanel(), KeyH: () => openHelp() };
+const PANEL_KEY_KIND = { KeyF: 'fleet', KeyN: 'ship', KeyI: 'empire', KeyR: 'research', KeyP: 'politics', KeyC: 'contracts', KeyM: 'map', KeyH: 'help' };
 const MOVE_KEYS = ['KeyW', 'KeyS', 'KeyA', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
 addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT') return;
@@ -127,6 +136,7 @@ addEventListener('keydown', e => {
   if (['KeyA', 'KeyD', 'ArrowLeft', 'ArrowRight'].includes(e.code)) turnKeyT = performance.now();
   if (mode !== 'play') return;
   if (MOVE_KEYS.includes(e.code) && auto && !dock) cancelAuto('Piloto automático desligado.');
+  if (['KeyW', 'ArrowUp'].includes(e.code) && dock && !e.repeat) { closePanel(); if (dock) undock(); }
   if (e.repeat) return;
   if (e.code === 'KeyE') interact();
   if (e.code === 'Escape') { if (panelOpen) closePanel(); else if (auto) cancelAuto('Piloto automático desligado.'); }
@@ -289,6 +299,7 @@ function update(dt) {
 
   updateProjectiles(dt);
   updateEnemies(dt);
+  updateFleet(dt);
   updatePickups(dt);
   updateFrags(dt);
   updateParts(dt);
@@ -403,8 +414,8 @@ function autopilot(dt) {
   // mineração automática: minera, recolhe o minério e segue para o próximo asteroide
   if (!astAlive(A.target)) {
     const pk = nearestPick(Math.max(700, ST.tractor * 2));
-    if (pk && cargoUsed() < ST.cargoMax) { A.tx = pk.x; A.ty = pk.y; steer(dt, pk.x, pk.y, 0); return false; }
-    if (cargoUsed() >= ST.cargoMax) { auto = null; toast('Porão cheio: mineração automática concluída. Clique num planeta para vender.', 'gold'); return false; }
+    if (pk && cargoUsed() < cargoCap()) { A.tx = pk.x; A.ty = pk.y; steer(dt, pk.x, pk.y, 0); return false; }
+    if (cargoUsed() >= cargoCap()) { auto = null; toast('Porão cheio: mineração automática concluída. Clique num planeta para vender.', 'gold'); return false; }
     A.target = nearestAst(2200);
     if (!A.target) { auto = null; toast('Nenhum asteroide por perto. Mineração encerrada.'); return false; }
   }
@@ -471,7 +482,7 @@ function respawn() {
   const pos = planetPos(p, G.time);
   S.x = pos.x + p.r + 300; S.y = pos.y; S.vx = S.vy = 0; S.hull = ST.hullMax; S.shield = ST.shieldMax; S.energy = ST.energyMax;
   cam.x = S.x; cam.y = S.y;
-  ENEMIES.length = 0;
+  ENEMIES.length = 0; FLEET_RT.clear();
   toast(`Rebocado até ${p.name}. Taxa de resgate: ${fmt(fee)} CR.`);
 }
 
@@ -503,7 +514,7 @@ function breakAsteroid(a) {
   }
 }
 function updatePickups(dt) {
-  const S = G.ship, full = cargoUsed() >= ST.cargoMax;
+  const S = G.ship, full = cargoUsed() >= cargoCap();
   for (let i = PICKS.length - 1; i >= 0; i--) {
     const k = PICKS[i];
     k.t -= dt; k.rot += dt * 2;
@@ -575,8 +586,9 @@ function updateHud() {
   setBar('h-sh', ST.shieldMax ? S.shield / ST.shieldMax : 0, ST.shieldMax ? `${fmt(S.shield)}/${fmt(ST.shieldMax)}` : '—');
   setBar('h-en', S.energy / ST.energyMax, `${fmt(S.energy)}/${fmt(ST.energyMax)}`);
   const cu = cargoUsed();
-  setBar('h-cargo', cu / ST.cargoMax, `${cu}/${fmt(ST.cargoMax)}`);
+  setBar('h-cargo', cu / cargoCap(), `${cu}/${fmt(cargoCap())}`);
   $('h-spd').textContent = Math.round(Math.hypot(S.vx, S.vy));
+  $('h-fleet').textContent = `${escorts().length} escoltas · ${G.fleet.length}/${fleetCap()}`;
   const sx = Math.floor(S.x / SECTOR), sy = Math.floor(S.y / SECTOR), d = Math.hypot(S.x / SECTOR, S.y / SECTOR);
   $('h-sec').textContent = `${sx}, ${sy}`;
   $('h-ring').textContent = `${ringName(ringOf(d))} · ${d.toFixed(1)} setores da origem`;
@@ -587,7 +599,7 @@ function updateHud() {
   else if (hazardMsg) { msg = hazardMsg; cls = 'bad'; Sfx.warn(); }
   else if (extracting) { msg = `Extração orbital em andamento… ${Math.round(extracting.t / extracting.dur * 100)}%`; }
   else if (auto) {
-    const what = auto.kind === 'dock' ? `Rota para <b>${auto.target.name}</b> · ${fmt(dist(S.x, S.y, auto.tx ?? S.x, auto.ty ?? S.y))} u` : auto.kind === 'mine' ? `Mineração automática · porão ${cu}/${fmt(ST.cargoMax)}` : `Atacando <b>${ENEMY_TYPES[auto.target.type].nome}</b>`;
+    const what = auto.kind === 'dock' ? `Rota para <b>${auto.target.name}</b> · ${fmt(dist(S.x, S.y, auto.tx ?? S.x, auto.ty ?? S.y))} u` : auto.kind === 'mine' ? `Mineração automática · porão ${cu}/${fmt(cargoCap())}` : `Atacando <b>${ENEMY_TYPES[auto.target.type].nome}</b>`;
     msg = `<span class="ap">Piloto automático</span> ${what} · <kbd>W A S D</kbd> retoma`; cls = 'auto';
   } else if (!dock && nearPlanet) { msg = `<kbd>E</kbd> Entrar em órbita de <b>${nearPlanet.name}</b>`; cls = 'act'; }
   else if (ENEMIES.length) { msg = `${ENEMIES.length} pirata${ENEMIES.length > 1 ? 's' : ''} por perto · clique numa nave para atacar`; cls = 'bad'; }
@@ -640,7 +652,7 @@ const STAR_LAYERS = [
   { tile: makeStarTile(33, 110, 3.4, 1), f: 0.08 },
 ];
 const DUST = Array.from({ length: 70 }, () => ({ x: Math.random(), y: Math.random(), z: rnd(0.4, 1) }));
-const PROJ_COL = { laser: [120, 235, 255], elaser: [255, 80, 70], ancient: [120, 255, 170], def: [125, 255, 168], plasma: [255, 120, 255], missile: [255, 200, 120] };
+const PROJ_COL = { flak: [255, 220, 140], rail: [230, 240, 255], laser: [120, 235, 255], elaser: [255, 80, 70], ancient: [120, 255, 170], def: [125, 255, 168], plasma: [255, 120, 255], missile: [255, 200, 120] };
 function render() {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.globalCompositeOperation = 'source-over';
@@ -682,7 +694,7 @@ function render() {
     if (!vis(x, y, R * 2.4)) continue;
     drawPlanet(ctx, p, x, y, R, Math.atan2(p.cy - p._y, p.cx - p._x), t);
     const c = G.col[p.id];
-    if (c && c.b.defesa) for (const pl of platformsOf(p, c)) drawPlatform(WX(pl.x), WY(pl.y), pl.a, Z);
+    if (c && c.def) drawDefenses(p, c, WX, WY, Z, t);
   }
   for (const a of snap.asts.concat(FRAGS)) {
     const x = WX(a.x), y = WY(a.y), R = a.r * Z;
@@ -760,6 +772,7 @@ function render() {
     ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(x - bw / 2, y - e.r * Z - 12 * DPR, bw, 3 * DPR);
     ctx.fillStyle = '#ff5050'; ctx.fillRect(x - bw / 2, y - e.r * Z - 12 * DPR, bw * clamp(e.hp / e.maxHp, 0, 1), 3 * DPR);
   }
+  if (mode === 'play') drawFleet(WX, WY, Z, t, vis);
   if (mode === 'play' && !dead) {
     const D = currentDesign(), x = WX(S.x), y = WY(S.y), sp = shipSprite(D, 3), k = Z / sp.scale;
     drawEngineFlames(ctx, D, x, y, S.a, thrustVis, Z, t);
@@ -838,13 +851,80 @@ function render() {
     ctx.fillStyle = 'rgba(95,225,255,0.35)'; ctx.beginPath(); ctx.arc((joy.ox + Math.cos(a) * d) * DPR, (joy.oy + Math.sin(a) * d) * DPR, 24 * DPR, 0, TAU); ctx.fill();
   }
 }
-function drawPlatform(x, y, a, Z) {
-  const s = Math.max(4 * DPR, 14 * Z);
-  ctx.save(); ctx.translate(x, y); ctx.rotate(a);
-  ctx.fillStyle = '#5a6270'; ctx.fillRect(-s, -s * 0.3, s * 2, s * 0.6);
-  ctx.fillStyle = '#9aa6b8'; ctx.beginPath(); ctx.arc(0, 0, s * 0.5, 0, TAU); ctx.fill();
-  ctx.fillStyle = '#7dffa8'; ctx.globalCompositeOperation = 'lighter'; ctx.beginPath(); ctx.arc(0, 0, s * 0.22, 0, TAU); ctx.fill();
-  ctx.restore();
+function drawFleet(WX, WY, Z, t, vis) {
+  for (const s of G.fleet) {
+    const rt = FLEET_RT.get(s.id); if (!rt) continue;
+    const x = WX(rt.x), y = WY(rt.y);
+    if (!vis(x, y, 120 * Z + 20)) continue;
+    const D = fleetDesign(s), sp = shipSprite(D, 2), k = Z / sp.scale, f = fstats(s);
+    if (rt.beam) {
+      const nx = WX(rt.x + Math.cos(rt.a) * f.r), ny = WY(rt.y + Math.sin(rt.a) * f.r);
+      for (const [w, a] of [[7, 0.15], [3, 0.5], [1.2, 1]]) { ctx.strokeStyle = `rgba(160,255,200,${a})`; ctx.lineWidth = w * DPR; ctx.beginPath(); ctx.moveTo(nx, ny); ctx.lineTo(WX(rt.beam.x2), WY(rt.beam.y2)); ctx.stroke(); }
+    }
+    drawEngineFlames(ctx, D, x, y, rt.a, rt.thrust, Z, t);
+    ctx.save(); ctx.translate(x, y); ctx.rotate(rt.a);
+    ctx.drawImage(sp.cv, -sp.size * k / 2, -sp.size * k / 2, sp.size * k, sp.size * k);
+    if (rt.hit > 0) { ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.5; ctx.drawImage(sp.cv, -sp.size * k / 2, -sp.size * k / 2, sp.size * k, sp.size * k); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; }
+    ctx.restore();
+    const R = f.r * Z, hpF = s.hp / f.hpMax;
+    if (hpF < 0.999) {
+      const bw = Math.max(26 * DPR, R * 2);
+      ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(x - bw / 2, y - R - 10 * DPR, bw, 3 * DPR);
+      ctx.fillStyle = hpF > 0.35 ? '#7dffa8' : '#ff5a5a'; ctx.fillRect(x - bw / 2, y - R - 10 * DPR, bw * clamp(hpF, 0, 1), 3 * DPR);
+    }
+    if (cam.z > 0.35) {
+      ctx.font = `${Math.round(10 * DPR)}px "Exo 2", system-ui, sans-serif`; ctx.textAlign = 'center';
+      ctx.fillStyle = s.post ? 'rgba(125,255,168,0.7)' : 'rgba(150,200,255,0.7)';
+      ctx.fillText(s.name, x, y + R + 14 * DPR);
+    }
+  }
+}
+function drawDefenses(p, c, WX, WY, Z, t) {
+  const near = ENEMIES.some(e => dist(e.x, e.y, p._x, p._y) < 3000);
+  // escudo planetário
+  const es = defLv(c, 'escudo');
+  if (es) {
+    const x = WX(p._x), y = WY(p._y), R = (p.r + 40 + Math.min(80, es * 6)) * Z;
+    ctx.globalCompositeOperation = 'lighter';
+    const g = ctx.createRadialGradient(x, y, R * 0.85, x, y, R);
+    g.addColorStop(0, 'rgba(95,180,255,0)'); g.addColorStop(1, `rgba(120,200,255,${near ? 0.35 + 0.1 * Math.sin(t * 6) : 0.08})`);
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, R, 0, TAU); ctx.fill();
+    ctx.globalCompositeOperation = 'source-over';
+  }
+  for (const u of defenseUnits(p, c)) {
+    const x = WX(u.x), y = WY(u.y);
+    if (x < -60 || y < -60 || x > CW + 60 || y > CH + 60) continue;
+    const s = Math.max(3 * DPR, ({ laser: 12, missil: 16, canhao: 22, minas: 7, fortaleza: 70 })[u.type] * Z);
+    ctx.save(); ctx.translate(x, y); ctx.rotate(u.a);
+    if (u.type === 'minas') {
+      const armed = (c._cd && (c._cd['minas' + u.i] || 0) <= 0);
+      ctx.fillStyle = '#4a4f58'; ctx.beginPath(); ctx.arc(0, 0, s, 0, TAU); ctx.fill();
+      ctx.fillStyle = armed ? (Math.floor(t * 2 + u.i) % 2 ? '#ff4040' : '#802020') : '#333'; ctx.beginPath(); ctx.arc(0, 0, s * 0.4, 0, TAU); ctx.fill();
+    } else if (u.type === 'fortaleza') {
+      ctx.fillStyle = '#4c5462'; ctx.fillRect(-s, -s * 0.18, s * 2, s * 0.36); ctx.fillRect(-s * 0.18, -s, s * 0.36, s * 2);
+      const g = ctx.createRadialGradient(-s * 0.2, -s * 0.2, 0, 0, 0, s * 0.55); g.addColorStop(0, '#d8e0ec'); g.addColorStop(1, '#5a6474');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, s * 0.55, 0, TAU); ctx.fill();
+      ctx.strokeStyle = '#8a96a8'; ctx.lineWidth = Math.max(1, s * 0.06); ctx.beginPath(); ctx.arc(0, 0, s * 0.8, 0, TAU); ctx.stroke();
+      ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = '#7dffa8';
+      for (let i = 0; i < 4; i++) { ctx.beginPath(); ctx.arc(Math.cos(i * Math.PI / 2) * s * 0.9, Math.sin(i * Math.PI / 2) * s * 0.9, s * 0.07, 0, TAU); ctx.fill(); }
+    } else {
+      const col = { laser: '#7dffa8', missil: '#ffb547', canhao: '#9cc2ff' }[u.type];
+      ctx.fillStyle = '#5a6270'; ctx.fillRect(-s, -s * 0.32, s * 2, s * 0.64);
+      ctx.fillStyle = '#a2adbd'; ctx.beginPath(); ctx.arc(0, 0, s * 0.55, 0, TAU); ctx.fill();
+      if (u.type === 'canhao') { ctx.fillStyle = '#3a404a'; ctx.fillRect(0, -s * 0.14, s * 1.4, s * 0.28); }
+      if (u.type === 'missil') { ctx.fillStyle = '#3a404a'; ctx.fillRect(-s * 0.45, -s * 0.45, s * 0.9, s * 0.9); }
+      ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = col; ctx.beginPath(); ctx.arc(0, 0, s * 0.22, 0, TAU); ctx.fill();
+    }
+    ctx.restore();
+  }
+  const ds = DRONES.get(p.id);
+  if (ds) for (const d of ds) {
+    const x = WX(d.x), y = WY(d.y), s = Math.max(3 * DPR, 9 * Z);
+    ctx.save(); ctx.translate(x, y); ctx.rotate(d.a);
+    ctx.fillStyle = '#c8d2e0'; ctx.beginPath(); ctx.moveTo(s * 1.2, 0); ctx.lineTo(-s, -s * 0.8); ctx.lineTo(-s * 0.5, 0); ctx.lineTo(-s, s * 0.8); ctx.fill();
+    ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = 'rgba(120,200,255,0.8)'; ctx.beginPath(); ctx.arc(-s * 0.8, 0, s * 0.35, 0, TAU); ctx.fill();
+    ctx.restore();
+  }
 }
 
 /* ---------- título ---------- */

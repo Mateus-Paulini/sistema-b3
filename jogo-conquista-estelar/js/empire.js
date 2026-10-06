@@ -21,7 +21,7 @@ function news(msg, cls = '') {
 
 /* ---------- fundação de colônias ---------- */
 function newColony(p, gov, pop) {
-  G.col[p.id] = { gov, b: { mina: 0, fazenda: 0, habitat: 0, comercio: 0, universidade: 0, estaleiro: 0, defesa: 0 }, pop, stab: GOV_MODS[gov].stab, since: G.time, govT: -999, mods: [], name: p.name };
+  G.col[p.id] = { gov, b: { mina: 0, fazenda: 0, habitat: 0, comercio: 0, universidade: 0, estaleiro: 0 }, def: Object.fromEntries(DEF_KEYS.map(k => [k, 0])), pop, stab: GOV_MODS[gov].stab, since: G.time, govT: -999, mods: [], name: p.name };
   planetCache.set(p.id, p);
   news(`${p.name} agora faz parte da Federação.`, 'ok');
 }
@@ -86,8 +86,8 @@ function colonyRates(p, c) {
   const research = (0.03 * lp + c.b.universidade * 0.18 * Math.pow(1.1, c.b.universidade)) * gm.research * stabF * modVal(c, 'research') * ESS();
   const mine = {};
   if (c.b.mina) for (const k in p.res) mine[k] = 0.035 * c.b.mina * Math.pow(1.1, c.b.mina) * p.res[k] * (1 + 0.08 * G.tech.mineracao) * stabF * ESS();
-  const defense = c.b.defesa * gm.defense;
-  const target = gm.stab + 3 * G.tech.sociologia + Math.min(18, defense * 2) + dip * 2.5 + (c.pop > popCap(p, c) * 0.95 ? -6 : 0) + modVal(c, 'stab') - 1;
+  const defense = defensePower(p, c);
+  const target = gm.stab + 3 * G.tech.sociologia + Math.min(18, defense * 1.2) + Math.min(10, defLv(c, 'escudo') * 1.5) + dip * 2.5 + (c.pop > popCap(p, c) * 0.95 ? -6 : 0) + modVal(c, 'stab') - 1;
   return { credits, research, mine, defense, dip, target: clamp(target, 0, 100), growth: 0.012 * gm.growth * (1 + 0.15 * c.b.fazenda) * stabF };
 }
 function empireTotals() {
@@ -150,29 +150,7 @@ function updateEmpire(dt) {
     const ev = G.events[i];
     if (G.time > ev.expires) { resolveEvent(ev, ev.def, true); }
   }
-  // defesa orbital: plataformas atiram em piratas próximos
-  for (const p of snap.planets) {
-    const c = G.col[p.id]; if (!c || !c.b.defesa) continue;
-    c._pt = (c._pt || 0) - dt;
-    if (c._pt > 0) continue;
-    c._pt = Math.max(0.35, 1.4 - 0.08 * c.b.defesa);
-    const plats = platformsOf(p, c);
-    for (const pl of plats) {
-      let best = null, bd = 1500;
-      for (const e of ENEMIES) { const d = dist(pl.x, pl.y, e.x, e.y); if (d < bd) { bd = d; best = e; } }
-      if (!best) break;
-      const a = Math.atan2(best.y - pl.y, best.x - pl.x);
-      PROJ.push({ own: 'p', kind: 'def', x: pl.x, y: pl.y, vx: Math.cos(a) * 1200, vy: Math.sin(a) * 1200, life: 1.4, dmg: 12 * Math.pow(1.1, c.b.defesa) * GOV_MODS[c.gov].defense });
-    }
-  }
-}
-function platformsOf(p, c) {
-  const n = Math.min(8, Math.ceil(c.b.defesa / 2)), out = [];
-  for (let i = 0; i < n; i++) {
-    const a = G.time * 0.15 + (i / n) * TAU, R = p.r + 90;
-    out.push({ x: p._x + Math.cos(a) * R, y: p._y + Math.sin(a) * R, a });
-  }
-  return out;
+  updateDefenses(dt);
 }
 
 /* ---------- governo ---------- */
@@ -205,7 +183,7 @@ const EVENT_DEFS = {
     title: p => `Tentativa de golpe em ${p.name}`,
     text: () => 'Oficiais das forças planetárias exigem o poder.',
     opts: (p, c) => [
-      { label: `Resistir (${fmt(cost(p, 1.5))} CR)`, cost: cost(p, 1.5), fx: () => { const ok = Math.random() < 0.35 + 0.08 * c.b.defesa; if (ok) { c.stab += 10; return 'O golpe fracassou. Os conspiradores foram presos.'; } c.gov = 'militar'; c.stab = 40; return 'A resistência falhou. Uma junta militar assumiu o poder.'; } },
+      { label: `Resistir (${fmt(cost(p, 1.5))} CR)`, cost: cost(p, 1.5), fx: () => { const ok = Math.random() < 0.35 + 0.04 * Math.min(12, defensePower(p, c)); if (ok) { c.stab += 10; return 'O golpe fracassou. Os conspiradores foram presos.'; } c.gov = 'militar'; c.stab = 40; return 'A resistência falhou. Uma junta militar assumiu o poder.'; } },
       { label: 'Aceitar a junta militar', fx: () => { c.gov = 'militar'; c.stab = Math.max(c.stab, 45); return 'O planeta agora é governado pelos militares.'; } },
     ],
     def: 1,
@@ -276,10 +254,18 @@ const EVENT_DEFS = {
   },
   raide: {
     title: p => `Raide pirata contra ${p.name}`,
-    text: (p, c) => `Uma frota pirata ataca a órbita. Defesa orbital nível ${c.b.defesa}.`,
+    text: (p, c) => `Uma frota pirata ataca a órbita. Poder defensivo: ${defensePower(p, c).toFixed(1)} contra força estimada ${(2 + p.dist * 0.9).toFixed(1)}.`,
     opts: (p, c) => [
-      { label: 'Confiar nas defesas', fx: () => { const pw = 1 + c.b.defesa * GOV_MODS[c.gov].defense, str = 1 + p.dist * 0.4; if (Math.random() < pw / (pw + str)) { c.stab += 4; return 'As plataformas repeliram os piratas!'; } const ks = Object.keys(c.b).filter(k => c.b[k] > 0); if (ks.length) { const k = pickR(ks); c.b[k]--; } c.stab -= 10; return 'Os piratas saquearam a colônia e danificaram instalações.'; } },
+      { label: 'Confiar nas defesas', fx: () => {
+        const pw = 1 + defensePower(p, c), str = 2 + p.dist * 0.9;
+        if (Math.random() < pw / (pw + str)) { c.stab += 4; return 'As defesas planetárias repeliram os piratas!'; }
+        if (Math.random() < Math.min(0.7, defLv(c, 'escudo') * 0.1)) { c.stab -= 3; return 'O escudo planetário segurou o pior do ataque. Danos leves.'; }
+        const ks = Object.keys(c.b).filter(k => c.b[k] > 0).map(k => ['b', k]).concat(Object.keys(c.def).filter(k => c.def[k] > 0).map(k => ['def', k]));
+        if (ks.length) { const [g, k] = pickR(ks); c[g][k]--; }
+        c.stab -= 10; return 'Os piratas saquearam a colônia e danificaram instalações.';
+      } },
       { label: `Pagar resgate (${fmt(cost(p, 1.3))} CR)`, cost: cost(p, 1.3), fx: () => 'Os piratas levaram o dinheiro e partiram.' },
+      { label: 'Enfrentar em combate', fx: () => { const pos = planetPos(p, G.time); spawnFleet(Math.max(2, p.dist + 1), pos.x + p.r + 700, pos.y, true); return `A frota pirata chegou à órbita de ${p.name}. Defesas, guarnição e frota estão em combate!`; } },
     ],
     def: 0,
   },

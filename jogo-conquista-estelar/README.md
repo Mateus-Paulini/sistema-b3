@@ -25,10 +25,10 @@ no `localStorage`.
 | Freio / ré lenta | S / ↓ | — |
 | Girar | A D / ← → (ou o bico segue o mouse) | joystick |
 | Atirar | Espaço / segurar clique no vazio | botão **Laser** |
-| Piloto automático | clique num asteroide (minera), planeta (vai e entra em órbita) ou pirata (ataca) | toque no objeto |
+| Piloto automático | clique num asteroide (minera), planeta (vai e entra em órbita, inclusive saindo de outra órbita) ou pirata (ataca) | toque no objeto |
 | Turbo | Shift | botão **Turbo** |
 | Entrar/sair de órbita | E | toque no aviso |
-| Painéis | N nave · I império · R pesquisa · P política · C contratos · M mapa · H manual | barra inferior |
+| Painéis | F frota · N nau capitânia · I império · R pesquisa · P política · C contratos · M mapa · H manual | barra inferior |
 | Zoom | roda do mouse / + − | botões + − |
 
 ## O que tem no jogo
@@ -45,8 +45,21 @@ no `localStorage`.
   scanner, raio trator, blindagem, nanorreparo, propulsor, capacitor), 6 raridades
   (comum → artefato) e níveis infinitos. Obtidos em lojas, na forja (com minério),
   em estaleiros de colônias e nos destroços de piratas.
+- **Frota**: a nave do jogador é a nau capitânia de uma frota. 8 classes
+  (caça, minerador, interceptador, cargueiro, corveta, fragata, destróier,
+  cruzador), cada uma com silhueta, casco, velocidade, porão e número de baterias
+  próprios. 6 armamentos configuráveis por bateria (laser, flak, plasma, mísseis,
+  feixe de mineração, canhão de trilho). Cada nave sobe de nível sem limite.
+  Ordens: escoltar, caçar, minerar, passivo. Naves podem ficar de guarnição numa
+  colônia. Limite de comando cresce com a classe Mk e com a pesquisa de Logística.
+- **Defesa planetária**: 7 estruturas por colônia, cada uma com níveis infinitos:
+  torres laser, baterias de mísseis, canhão orbital, campo minado, hangar de
+  caças-drones, escudo planetário e fortaleza orbital (com pré-requisitos). Elas
+  aparecem e combatem em órbita; raides comparam o poder defensivo com a força
+  pirata, ou podem ser enfrentados em combate real.
 - **Combate**: piratas em frotas que escalam com a distância (batedores,
-  corsários, canhoneiras, Sentinelas dos Antigos).
+  corsários, canhoneiras, Sentinelas dos Antigos) e miram a nau capitânia ou as
+  escoltas.
 - **Planetas**: extração orbital de recursos, mercados com preços próprios,
   contratos (entrega, caça, exploração), colonização de mundos vazios e anexação
   de mundos habitados por influência.
@@ -71,7 +84,8 @@ no `localStorage`.
 - `js/universe.js`: tipos de planeta, recursos, estrelas e geração por setor.
 - `js/data.js`: curvas de progressão, módulos, inimigos, construções, pesquisa, governos.
 - `js/gfx.js`: renderização de planetas, estrelas, buracos negros, asteroides, naves e nebulosas.
-- `js/ship.js`: atributos, armas, módulos, piratas e projéteis.
+- `js/ship.js`: nau capitânia, armas, módulos, piratas e projéteis.
+- `js/fleet.js`: frota (classes, armas, IA, guarnição) e defesas planetárias.
 - `js/empire.js`: colônias, produção, política, eventos, contratos e ascensão.
 - `js/ui.js`: painéis da interface e mapa galáctico.
 - `js/main.js`: loop, pilotagem, piloto automático, render e HUD.

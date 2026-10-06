@@ -87,9 +87,51 @@ const BUILDINGS = {
   habitat: { nome: 'Habitats', desc: 'Aumenta a população máxima', base: 190 },
   comercio: { nome: 'Porto comercial', desc: 'Gera créditos a partir da população', base: 260 },
   universidade: { nome: 'Universidade', desc: 'Gera pontos de pesquisa', base: 340 },
-  estaleiro: { nome: 'Estaleiro', desc: 'Desconto em melhorias de nave e produção de módulos', base: 420 },
-  defesa: { nome: 'Defesa orbital', desc: 'Plataformas que atacam piratas e seguram revoltas', base: 300 },
+  estaleiro: { nome: 'Estaleiro', desc: 'Libera classes maiores de nave, dá desconto em melhorias e produz módulos', base: 420 },
 };
+
+/* ---------- defesa planetária: tipos independentes, níveis infinitos ---------- */
+const DEFENSES = {
+  laser: { nome: 'Torres laser', desc: 'Disparos rápidos de curto alcance', base: 260, power: 1, range: 1300, cd: 0.45, dmg: 9 },
+  missil: { nome: 'Baterias de mísseis', desc: 'Mísseis teleguiados de longo alcance', base: 380, power: 1.4, range: 2200, cd: 2.2, dmg: 26 },
+  canhao: { nome: 'Canhão orbital', desc: 'Projéteis de massa: lento, devastador, alcance enorme', base: 650, power: 2, range: 3000, cd: 3.2, dmg: 90, req: { laser: 3 } },
+  minas: { nome: 'Campo minado', desc: 'Minas na órbita explodem quando inimigos se aproximam', base: 300, power: 0.9, range: 90, cd: 6, dmg: 70 },
+  hangar: { nome: 'Hangar de caças', desc: 'Lança caças-drones que patrulham e perseguem invasores', base: 520, power: 1.6, range: 2600, cd: 0.6, dmg: 7, req: { laser: 2 } },
+  escudo: { nome: 'Escudo planetário', desc: 'Absorve ataques de raides e eleva a estabilidade', base: 450, power: 1.8 },
+  fortaleza: { nome: 'Fortaleza orbital', desc: 'Estação de batalha com várias baterias e grande poder de fogo', base: 2400, power: 5, range: 2400, cd: 0.9, dmg: 40, req: { laser: 5, missil: 5, escudo: 3 } },
+};
+const DEF_KEYS = Object.keys(DEFENSES);
+const defCost = (k, lvl, p) => Math.round(DEFENSES[k].base * Math.pow(GROWTH, lvl) * (1 + 0.04 * (p.dist || 0)));
+const defScale = lvl => Math.pow(1.12, lvl);
+
+/* ---------- frota: classes de nave e armamentos ---------- */
+const WEAPONS = {
+  laser: { nome: 'Laser', desc: 'Cadência alta, alcance médio', dmg: 7, cd: 0.3, range: 950, speed: 1500, req: 0 },
+  flak: { nome: 'Flak', desc: 'Rajada em leque de curto alcance', dmg: 4, cd: 0.4, range: 600, speed: 1100, pellets: 5, req: 1 },
+  plasma: { nome: 'Plasma', desc: 'Esferas pesadas e lentas', dmg: 28, cd: 1.1, range: 850, speed: 760, req: 2 },
+  missil: { nome: 'Mísseis', desc: 'Teleguiados, longo alcance', dmg: 20, cd: 1.6, range: 1600, speed: 500, req: 3 },
+  feixe: { nome: 'Feixe de mineração', desc: 'Raio contínuo; triplo de dano em asteroides', dmg: 3.5, cd: 0.1, range: 560, req: 0 },
+  railgun: { nome: 'Canhão de trilho', desc: 'Projétil hipersônico, alcance extremo', dmg: 60, cd: 2.3, range: 2000, speed: 3200, req: 5 },
+};
+const SHIP_CLASSES = {
+  caca: { nome: 'Caça', desc: 'Pequeno, ágil e barato', hp: 60, spd: 760, slots: 1, cargo: 0, cost: 380, req: 0, vt: 1, scale: 0.75, hull: '#b9c2cf' },
+  minerador: { nome: 'Minerador', desc: 'Barcaça de mineração com porão próprio', hp: 130, spd: 480, slots: 1, cargo: 35, cost: 560, req: 0, vt: 2, scale: 0.9, hull: '#d8c49a', mine: 1.6, def: ['feixe'] },
+  interceptador: { nome: 'Interceptador', desc: 'O mais rápido da frota', hp: 55, spd: 900, slots: 2, cargo: 0, cost: 720, req: 1, vt: 2, scale: 0.8, hull: '#c0d4dc' },
+  cargueiro: { nome: 'Cargueiro', desc: 'Porão enorme, sem armas', hp: 240, spd: 420, slots: 0, cargo: 140, cost: 900, req: 1, vt: 3, scale: 1.1, hull: '#9aa4ae' },
+  corveta: { nome: 'Corveta', desc: 'Escolta versátil', hp: 170, spd: 620, slots: 2, cargo: 5, cost: 1150, req: 2, vt: 4, scale: 0.95, hull: '#c9ccd4' },
+  fragata: { nome: 'Fragata', desc: 'Blindada, três baterias', hp: 400, spd: 500, slots: 3, cargo: 10, cost: 2600, req: 4, vt: 6, scale: 1.15, hull: '#d9d2c0' },
+  destroier: { nome: 'Destróier', desc: 'Navio de linha com quatro baterias', hp: 750, spd: 430, slots: 4, cargo: 15, cost: 5400, req: 7, vt: 9, scale: 1.35, hull: '#c8d0dc' },
+  cruzador: { nome: 'Cruzador', desc: 'Fortaleza móvel com seis baterias', hp: 1500, spd: 340, slots: 6, cargo: 25, cost: 15000, req: 12, vt: 14, scale: 1.7, hull: '#e0e4ec' },
+};
+const CLASS_KEYS = Object.keys(SHIP_CLASSES);
+const shipUpCost = s => Math.round(SHIP_CLASSES[s.cls].cost * 0.35 * Math.pow(GROWTH, s.lvl));
+const ORDERS = {
+  escolta: { nome: 'Escoltar', desc: 'Seguem a nau capitânia e defendem quem atacar' },
+  agressivo: { nome: 'Caçar', desc: 'Atacam qualquer pirata ao alcance dos sensores' },
+  minerar: { nome: 'Minerar', desc: 'Mineram asteroides próximos quando não há ameaças' },
+  passivo: { nome: 'Passivo', desc: 'Só seguem; não entram em combate' },
+};
+const SHIP_NAMES = ['Aurora', 'Vigília', 'Ícaro', 'Tempestade', 'Lâmina', 'Órion', 'Sentinela', 'Fênix', 'Relâmpago', 'Corvo', 'Andrômeda', 'Valquíria', 'Trovão', 'Cometa', 'Nêmesis', 'Atlas', 'Hidra', 'Pégaso', 'Quimera', 'Zéfiro'];
 const buildCost = (k, lvl, p) => Math.round(BUILDINGS[k].base * Math.pow(GROWTH, lvl) * (1 + 0.04 * (p.dist || 0)));
 
 /* ---------- pesquisa (níveis infinitos) ---------- */
@@ -101,6 +143,8 @@ const TECHS = {
   mineracao: { nome: 'Mineração', desc: '+8% de minério extraído (nave e minas)', base: 40 },
   cartografia: { nome: 'Cartografia', desc: '+10% de créditos por descoberta e alcance de sensores', base: 35 },
   sociologia: { nome: 'Sociologia', desc: '+3 de estabilidade em todas as colônias', base: 60 },
+  logistica: { nome: 'Logística de frota', desc: '+1 nave no limite de comando', base: 70 },
+  fortificacao: { nome: 'Fortificação', desc: '+8% de dano e resistência das defesas planetárias', base: 55 },
 };
 const techCost = (k, lvl) => Math.round(TECHS[k].base * Math.pow(1.18, lvl));
 

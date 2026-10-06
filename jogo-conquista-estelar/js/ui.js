@@ -107,10 +107,11 @@ function openPlanetPanel(p, tab) {
     root.appendChild(head);
     root.appendChild(statusBar());
     const list = [['geral', 'Visão geral'], ['mercado', 'Mercado'], ['estaleiro', 'Estaleiro'], ['colonia', col ? 'Colônia' : p.pop > 0 ? 'Diplomacia' : 'Colonizar']];
+    if (col) list.push(['defesa', 'Defesa']);
     if (p.pop > 0) list.push(['contratos', 'Contratos']);
     root.appendChild(tabs(list, cur, k => { cur = k; redraw(); }));
     const body = h('div', 'tab-body');
-    ({ geral: tabGeral, mercado: tabMercado, estaleiro: tabEstaleiro, colonia: tabColonia, contratos: tabContratos }[cur])(body, p, star, sc);
+    ({ geral: tabGeral, mercado: tabMercado, estaleiro: tabEstaleiro, colonia: tabColonia, defesa: tabDefesa, contratos: tabContratos }[cur])(body, p, star, sc);
     root.appendChild(body);
     const foot = h('div', 'foot');
     foot.appendChild(btn('Deixar órbita <kbd>E</kbd>', () => closePanel(), 'primary'));
@@ -163,7 +164,7 @@ function updateExtraction(dt) {
   if (extracting.t < extracting.dur) return;
   const p = extracting.p; extracting = null;
   G.extract[p.id] = G.time;
-  const free = ST.cargoMax - cargoUsed();
+  const free = cargoCap() - cargoUsed();
   let got = 0; const parts = [];
   for (const [k, v] of Object.entries(p.res)) {
     const q = Math.min(free - got, Math.round(v * (6 + p.r / 30) * ST.oreMult));
@@ -217,7 +218,16 @@ function tabEstaleiro(body, p) {
     return;
   }
   body.insertAdjacentHTML('beforeend', `<p class="muted">${y.colony && y.discount < 1 ? `Estaleiro da Federação: <b class="ok">${Math.round((1 - y.discount) * 100)}% de desconto</b> em melhorias.` : 'Estaleiro civil.'} Classe atual: <b>Mk ${romanize(st.tier)}</b> · ${G.ship.equip.length}/${st.slots} módulos.</p>`);
-  body.appendChild(sec('Melhorias da nave (sem limite de nível)'));
+  body.appendChild(sec(`Construir naves · frota ${G.fleet.length}/${fleetCap()}`));
+  const yl = shipyardLevel();
+  body.insertAdjacentHTML('beforeend', `<p class="muted small">${y.colony ? `Estaleiro nível ${yl}: classes maiores exigem estaleiros mais desenvolvidos (aba Colônia).` : 'Estaleiro civil: apenas naves leves. Colônias com estaleiro constroem classes maiores.'}</p>`);
+  for (const k of CLASS_KEYS) {
+    const C = SHIP_CLASSES[k], ok = yl >= C.req, price = buildPrice(k);
+    body.appendChild(row(`${C.nome} <span class="muted small">· ${C.slots} arma${C.slots === 1 ? '' : 's'}${C.cargo ? ` · porão ${C.cargo}` : ''}</span>`,
+      ok ? `${C.desc}. Casco ${fmt(C.hp)}, velocidade ${C.spd}.` : `Requer estaleiro nível ${C.req}.`,
+      ok ? btn(`${fmt(price)} CR`, () => { if (buildShip(k)) redraw(); }, 'sm', G.fleet.length >= fleetCap(), price) : '🔒', ok ? '' : 'dim'));
+  }
+  body.appendChild(sec('Melhorias da nau capitânia (sem limite de nível)'));
   attrRows(body, y.discount);
   body.appendChild(sec('Loja de módulos'));
   for (const o of shopOffers(p)) {
@@ -331,6 +341,89 @@ function contractProgress(c) {
   if (c.k === 'caca') return `${Math.min(c.prog, c.n)}/${c.n} abatidos`;
   if (c.k === 'explorar') return `${Math.min(G.stats.found - c.base, c.n)}/${c.n} descobertos`;
   return `${Math.min(resAvail(c.res), c.q)}/${c.q} disponíveis (porão + armazém). Entregue em órbita do planeta.`;
+}
+
+function tabDefesa(body, p) {
+  const c = G.col[p.id];
+  const pw = defensePower(p, c), threat = 2 + p.dist * 0.9;
+  body.appendChild(sec('Poder defensivo'));
+  body.insertAdjacentHTML('beforeend', `<div class="bigbar ${pw >= threat ? '' : 'warn'}"><i style="width:${Math.min(100, pw / (threat * 2) * 100)}%"></i><span>${pw.toFixed(1)} · ameaça pirata da região ≈ ${threat.toFixed(1)}</span></div>
+    <p class="muted small">Cada tipo de defesa evolui sem limite (+12% de dano por nível). O regime (${GOVS[c.gov].nome}: defesa ×${GOV_MODS[c.gov].defense}) e a pesquisa de Fortificação multiplicam tudo. Raides contra a colônia comparam este poder com a força pirata.</p>`);
+  body.appendChild(sec('Estruturas'));
+  for (const k of DEF_KEYS) {
+    const D = DEFENSES[k], lv = defLv(c, k), ok = defReqOk(c, k), cost = defCost(k, lv, p);
+    const reqTxt = D.req ? 'Requer ' + Object.entries(D.req).map(([q, n]) => `${DEFENSES[q].nome} nv ${n}`).join(', ') : '';
+    const eff = k === 'escudo' ? `bloqueio de raides ${Math.min(70, lv * 10)}% · +${Math.min(10, lv * 1.5).toFixed(1)} estab.` : D.dmg ? `dano ${(D.dmg * defScale(lv) * defMult(c)).toFixed(1)} · alcance ${fmt(D.range)}` : '';
+    body.appendChild(row(`${D.nome} ${pips(lv)}`, `${D.desc}${eff ? ' · ' + eff : ''}${!ok ? ` · <span class="bad">${reqTxt}</span>` : ''}`,
+      btn(`${fmt(cost)} CR`, () => { if (buildDefense(p, k)) redraw(); }, 'sm', !ok, ok ? cost : undefined), ok ? '' : 'dim'));
+  }
+  body.appendChild(sec('Guarnição'));
+  const here = G.fleet.filter(s => s.post === p.id);
+  if (!here.length) body.insertAdjacentHTML('beforeend', '<p class="muted">Nenhuma nave guarnecendo este planeta. Atribua naves pela aba Frota (F) enquanto estiver em órbita.</p>');
+  for (const s of here) body.appendChild(row(`${s.name} <span class="muted">· ${SHIP_CLASSES[s.cls].nome} ${pips(s.lvl)}</span>`, `Poder ${shipPower(s).toFixed(1)}`, btn('Chamar para a frota', () => { garrison(s, null); redraw(); }, 'sm')));
+  const avail = escorts();
+  if (avail.length && dock === p) {
+    const r = h('div', 'r-act left');
+    avail.forEach(s => r.appendChild(btn(`Guarnecer: ${s.name}`, () => { garrison(s, p); redraw(); }, 'sm ghost')));
+    body.appendChild(r);
+  }
+}
+
+/* =====================================================================
+   FROTA (F)
+   ===================================================================== */
+function openFleetPanel() {
+  showPanel('fleet', () => {
+    const root = h('div');
+    const yl = shipyardLevel();
+    root.appendChild(h('div', '', `<div class="eyebrow">Comando</div><h2>Frota</h2><p class="muted">A nau capitânia lidera; as escoltas seguem em formação, lutam, mineram e aumentam o porão total. Naves em guarnição defendem uma colônia. Limite de comando: <b>${G.fleet.length}/${fleetCap()}</b> (cresce com a classe Mk da nau capitânia e com a pesquisa Logística de frota).</p>`));
+    root.appendChild(statusBar());
+    root.appendChild(sec('Ordens das escoltas'));
+    const og = h('div', 'orders');
+    for (const k in ORDERS) { const b = h('button', 'gov' + (G.fleetOrder === k ? ' on' : ''), `<b>${ORDERS[k].nome}</b><span class="mods">${ORDERS[k].desc}</span>`); b.onclick = () => { G.fleetOrder = k; Sfx.ok(); redraw(); }; og.appendChild(b); }
+    root.appendChild(og);
+    if (yl < 0) root.insertAdjacentHTML('beforeend', '<p class="muted small">Melhorias e troca de armas exigem estar em órbita de um planeta com estaleiro (habitado ou colônia).</p>');
+    const groups = [['Escoltas', G.fleet.filter(s => !s.post)], ['Guarnições', G.fleet.filter(s => s.post)]];
+    for (const [title, list] of groups) {
+      if (!list.length) continue;
+      root.appendChild(sec(`${title} (${list.length})`));
+      for (const s of list) {
+        const C = SHIP_CLASSES[s.cls], f = fstats(s), card = h('div', 'shipcard');
+        const D = fleetDesign(s), sp = shipSprite(D, 2), pv = h('canvas', 'mini'); pv.width = pv.height = 72;
+        const g = pv.getContext('2d'); g.translate(36, 36); g.rotate(-Math.PI / 2); const kk = 66 / sp.size; g.drawImage(sp.cv, -sp.size * kk / 2, -sp.size * kk / 2, sp.size * kk, sp.size * kk);
+        card.appendChild(pv);
+        const info = h('div', 'sc-info');
+        const where = s.post ? `Guarnecendo ${colPlanet(s.post) ? colPlanet(s.post).name : '?'}` : 'Na frota';
+        info.innerHTML = `<div class="r-title">${s.name} <span class="muted">· ${C.nome}</span> ${pips(s.lvl)}</div>
+          <div class="r-desc">${where} · casco ${fmt(s.hp)}/${fmt(f.hpMax)} · dano ×${f.dmg.toFixed(2)} · vel ${Math.round(f.spd)}${f.cargo ? ` · porão ${f.cargo}` : ''} · poder ${shipPower(s).toFixed(1)}</div>`;
+        const hpb = h('div', 'meter'); hpb.innerHTML = `<i style="width:${clamp(s.hp / f.hpMax, 0, 1) * 100}%;background:${s.hp / f.hpMax > 0.35 ? 'var(--green)' : 'var(--red)'}"></i>`; info.appendChild(hpb);
+        // armas por espaço
+        if (s.weapons.length) {
+          const ws = h('div', 'wslots');
+          s.weapons.forEach((w, i) => {
+            const sel = document.createElement('select'); sel.id = 'w-' + s.id + '-' + i; sel.disabled = yl < 0;
+            for (const k in WEAPONS) { const o = document.createElement('option'); o.value = k; o.textContent = WEAPONS[k].nome + (yl < WEAPONS[k].req && k !== w ? ` (estaleiro ${WEAPONS[k].req})` : ''); o.disabled = yl < WEAPONS[k].req && k !== w; o.selected = k === w; sel.appendChild(o); }
+            sel.onchange = () => { if (!refit(s, i, sel.value)) toast('Este armamento exige um estaleiro mais avançado.', 'bad'); redraw(); };
+            const lab = h('label', '', `Arma ${i + 1}`); lab.setAttribute('for', sel.id);
+            const wrap = h('span', 'wsl'); wrap.appendChild(lab); wrap.appendChild(sel); ws.appendChild(wrap);
+          });
+          info.appendChild(ws);
+          info.insertAdjacentHTML('beforeend', `<div class="r-desc">${s.weapons.map(w => `${WEAPONS[w].nome}: ${(WEAPONS[w].dmg * f.dmg).toFixed(1)} dano, alcance ${WEAPONS[w].range}`).join(' · ')}</div>`);
+        }
+        const acts = h('div', 'r-act left');
+        const uc = shipUpCost(s);
+        acts.appendChild(btn(`Melhorar · ${fmt(uc)} CR`, () => { if (upgradeFleetShip(s)) redraw(); }, 'sm', yl < 0, yl < 0 ? undefined : uc));
+        if (s.post) acts.appendChild(btn('Chamar para a frota', () => { garrison(s, null); redraw(); }, 'sm'));
+        else if (dock && isColony(dock)) acts.appendChild(btn(`Guarnecer ${dock.name}`, () => { garrison(s, dock); redraw(); }, 'sm'));
+        acts.appendChild(btn('Desmontar', () => { if (s._confirm) { scrapShip(s); redraw(); } else { s._confirm = true; redraw(); } }, 'sm ' + (s._confirm ? 'danger' : 'ghost')));
+        info.appendChild(acts);
+        card.appendChild(info);
+        root.appendChild(card);
+      }
+    }
+    if (!G.fleet.length) root.insertAdjacentHTML('beforeend', '<p class="muted">Sem naves na frota. Construa naves no Estaleiro de um planeta habitado ou colônia.</p>');
+    return root;
+  }, { onClose: () => { for (const s of G.fleet) delete s._confirm; } });
 }
 
 /* =====================================================================
@@ -596,12 +689,13 @@ function openHelp() {
     </dl>
     <h3>Painéis</h3>
     <dl class="keys">
-      <dt>N</dt><dd>Nave: atributos e módulos</dd><dt>I</dt><dd>Império: colônias, armazém, ascensão</dd>
+      <dt>F</dt><dd>Frota: escoltas, guarnições, armas e ordens</dd><dt>N</dt><dd>Nau capitânia: atributos e módulos</dd><dt>I</dt><dd>Império: colônias, armazém, ascensão</dd>
       <dt>R</dt><dd>Pesquisa</dd><dt>P</dt><dd>Política: decisões e notícias</dd>
       <dt>C</dt><dd>Contratos</dd><dt>M</dt><dd>Mapa galáctico</dd><dt>H</dt><dd>Este manual</dd>
     </dl>
     <h3>Progressão</h3>
     <p>Tudo cresce sem limite: cada atributo da nave, cada módulo, cada construção e cada tecnologia. O custo sobe 15% por nível. A cada 10 níveis somados, a nave sobe de classe (Mk) e ganha visual e espaços de módulo novos.</p>
+    <p>Você comanda uma frota: construa caças, mineradores, cargueiros, corvetas, fragatas, destróieres e cruzadores no estaleiro, escolha as armas de cada nave e dê ordens (escoltar, caçar, minerar). Naves podem ficar de guarnição numa colônia. Cada colônia tem defesas próprias (torres laser, mísseis, canhão orbital, minas, hangar de caças, escudo e fortaleza), todas com níveis infinitos.</p>
     <p>Funde colônias em mundos vazios ou ganhe influência em mundos habitados até eles aderirem à Federação. Escolha o governo de cada colônia: cada regime tem vantagens e custos reais, e os vizinhos reagem.</p>
     <p>Quanto mais longe da origem, mais ricos os recursos e mais fortes os piratas. Quando chegar longe o bastante, a Ascensão recomeça a galáxia com bônus permanentes.</p>
     <div class="foot" id="help-foot"></div></div>`);

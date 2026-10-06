@@ -22,6 +22,7 @@
     <div class="bar en" id="h-en"><label>Energia</label><div class="track"><i></i></div><span></span></div>
     <div class="bar cargo" id="h-cargo"><label>Carga</label><div class="track"><i></i></div><span></span></div>
     <div class="spd"><span class="lbl">Velocidade</span> <b id="h-spd">0</b> <span class="unit">u/s</span></div>
+    <div class="spd"><span class="lbl">Frota</span> <b id="h-fleet">0</b></div>
   </div>
   <div class="hud-tr">
     <canvas id="radar" width="170" height="170"></canvas>
@@ -30,6 +31,7 @@
     <div class="hud-btns"><button class="btn ghost sm" data-open="KeyH">Manual <kbd>H</kbd></button><button class="btn ghost sm" id="h-menu">Menu</button></div>
   </div>
   <nav class="menubar" aria-label="Painéis">
+    <button class="mb" data-open="KeyF"><b>Frota</b><kbd>F</kbd></button>
     <button class="mb" data-open="KeyN"><b>Nave</b><kbd>N</kbd></button>
     <button class="mb" data-open="KeyI"><b>Império</b><kbd>I</kbd></button>
     <button class="mb" data-open="KeyR"><b>Pesquisa</b><kbd>R</kbd></button>
@@ -50,7 +52,7 @@
   <div class="t-inner">
     <div class="eyebrow">Um universo sem fim</div>
     <h1>Conquista<br>Estelar</h1>
-    <p class="tag">Explore setores infinitos, evolua sua nave sem limite, colonize mundos, escolha seus governos e avance rumo ao abismo.</p>
+    <p class="tag">Explore setores infinitos, comande frotas, fortifique planetas, colonize mundos, escolha seus governos e avance rumo ao abismo.</p>
     <div class="t-btns">
       <button class="btn primary lg" id="btn-new">Nova campanha</button>
       <button class="btn lg" id="btn-continue" hidden>Continuar</button>
@@ -66,6 +68,7 @@
 <script src="js/data.js"></script>
 <script src="js/gfx.js"></script>
 <script src="js/ship.js"></script>
+<script src="js/fleet.js"></script>
 <script src="js/empire.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/main.js"></script>
